@@ -26,6 +26,7 @@ import (
 const SettingsFile = "settings.json"
 const ConnectionsFile = "connections.json"
 const ProfilesFile = "profiles.json"
+const KeybindingsFile = "keybindings.json"
 
 var configWriteLock sync.Mutex
 
@@ -365,6 +366,12 @@ type TermThemeType struct {
 	Cursor              string  `json:"cursor"`
 }
 
+type KeybindingConfigType struct {
+	Command    string   `json:"command"`
+	Keys       []string `json:"keys"`
+	CommandStr string   `json:"commandstr,omitempty"`
+}
+
 type FullConfigType struct {
 	Settings       SettingsType                    `json:"settings" merge:"meta"`
 	MimeTypes      map[string]MimeTypeConfigType   `json:"mimetypes"`
@@ -376,6 +383,7 @@ type FullConfigType struct {
 	Connections    map[string]ConnKeywords         `json:"connections"`
 	Bookmarks      map[string]WebBookmark          `json:"bookmarks"`
 	WaveAIModes    map[string]AIModeConfigType     `json:"waveai"`
+	Keybindings    []KeybindingConfigType          `json:"keybindings" configfile:"-"`
 	ConfigErrors   []ConfigError                   `json:"configerrors" configfile:"-"`
 	Version        string                          `json:"version" configfile:"-"`
 	BuildTime      string                          `json:"buildtime" configfile:"-"`
@@ -699,9 +707,68 @@ func ReadFullConfig() FullConfigType {
 			utilfn.ReUnmarshal(fieldPtr, configPart)
 		}
 	}
+	keybindings, kbErrs := readKeybindingsConfig()
+	fullConfig.Keybindings = keybindings
+	fullConfig.ConfigErrors = append(fullConfig.ConfigErrors, kbErrs...)
 	fullConfig.Version = wavebase.WaveVersion
 	fullConfig.BuildTime = wavebase.BuildTime
 	return fullConfig
+}
+
+func readKeybindingsFile(fsys fs.FS, fileName string) ([]KeybindingConfigType, []ConfigError) {
+	barr, err := fs.ReadFile(fsys, fileName)
+	if err != nil {
+		barr, err = fs.ReadFile(fsys, filepath.ToSlash(fileName))
+	}
+	if err != nil {
+		return nil, nil
+	}
+	var keybindings []KeybindingConfigType
+	if jsonErr := json.Unmarshal(barr, &keybindings); jsonErr != nil {
+		return nil, []ConfigError{{
+			File: fileName,
+			Err:  jsonErr.Error(),
+		}}
+	}
+	return keybindings, nil
+}
+
+func keybindingKey(kb KeybindingConfigType) string {
+	if kb.CommandStr != "" {
+		return kb.Command + ":" + kb.CommandStr
+	}
+	return kb.Command
+}
+
+func mergeKeybindings(defaultKBs []KeybindingConfigType, userKBs []KeybindingConfigType) []KeybindingConfigType {
+	if len(userKBs) == 0 {
+		return defaultKBs
+	}
+	result := make([]KeybindingConfigType, len(defaultKBs))
+	copy(result, defaultKBs)
+	kbMap := make(map[string]int)
+	for i, kb := range result {
+		kbMap[keybindingKey(kb)] = i
+	}
+	for _, userKB := range userKBs {
+		key := keybindingKey(userKB)
+		if idx, ok := kbMap[key]; ok {
+			result[idx].Keys = userKB.Keys
+		} else {
+			kbMap[key] = len(result)
+			result = append(result, userKB)
+		}
+	}
+	return result
+}
+
+func readKeybindingsConfig() ([]KeybindingConfigType, []ConfigError) {
+	defaultKBs, cerrs := readKeybindingsFile(defaultconfig.ConfigFS, KeybindingsFile)
+	configDirAbsPath := wavebase.GetWaveConfigDir()
+	configDirFsys := os.DirFS(configDirAbsPath)
+	userKBs, cerrs2 := readKeybindingsFile(configDirFsys, KeybindingsFile)
+	allErrs := append(cerrs, cerrs2...)
+	return mergeKeybindings(defaultKBs, userKBs), allErrs
 }
 
 func GetConfigSubdirs() []string {

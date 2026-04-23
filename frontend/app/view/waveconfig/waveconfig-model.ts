@@ -97,6 +97,13 @@ function makeConfigFiles(isWindows: boolean): ConfigFile[] {
             hasJsonView: true,
         },
         {
+            name: "Keybindings",
+            path: "keybindings.json",
+            language: "json",
+            description: "Custom keyboard shortcuts",
+            hasJsonView: true,
+        },
+        {
             name: "Secrets",
             path: "secrets",
             isSecrets: true,
@@ -359,7 +366,8 @@ export class WaveConfigViewModel implements ViewModel {
         try {
             const parsed = JSON.parse(fileContent);
 
-            if (typeof parsed !== "object" || parsed == null || Array.isArray(parsed)) {
+            const isArray = Array.isArray(parsed);
+            if (typeof parsed !== "object" || parsed == null || (isArray && selectedFile.path !== "keybindings.json")) {
                 globalStore.set(this.validationErrorAtom, "JSON must be an object, not an array, primitive, or null");
                 return;
             }
