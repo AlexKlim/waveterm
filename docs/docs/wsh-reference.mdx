@@ -195,6 +195,38 @@ wsh editconfig presets/ai.json
 
 ---
 
+## excalidraw
+
+Open an Excalidraw diagram in a new block.
+
+```sh
+wsh excalidraw [file]
+```
+
+Opens the specified `.excalidraw` file for editing. If the file does not exist, creates an empty canvas with that file path set for autosave. If no file is specified, opens a blank canvas.
+
+Flags:
+
+- `-m, --magnified` - open the block in magnified mode
+
+Examples:
+
+```sh
+# Open an existing diagram
+wsh excalidraw diagram.excalidraw
+
+# Create a new diagram (file will be created on first save)
+wsh excalidraw ~/diagrams/new-design.excalidraw
+
+# Open a blank canvas (no file path)
+wsh excalidraw
+
+# Open in magnified mode
+wsh excalidraw -m architecture.excalidraw
+```
+
+---
+
 ## setbg
 
 The `setbg` command allows you to set a background image or color for the current tab with various customization options.
