@@ -378,6 +378,13 @@ declare global {
         maxitems: number;
     };
 
+    // wshrpc.CommandExcalidrawPushData
+    type CommandExcalidrawPushData = {
+        blockid: string;
+        scenedata: any;
+        format?: string;
+    };
+
     // wshrpc.CommandFileCopyData
     type CommandFileCopyData = {
         srcuri: string;
