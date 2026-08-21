@@ -26,6 +26,7 @@ export type ConfigFile = {
     docsUrl?: string;
     validator?: ConfigValidator;
     isSecrets?: boolean;
+    isArray?: boolean;
     hasJsonView?: boolean;
     visualComponent?: React.ComponentType<{ model: WaveConfigViewModel }>;
 };
@@ -94,6 +95,14 @@ function makeConfigFiles(isWindows: boolean): ConfigFile[] {
             path: "backgrounds.json",
             language: "json",
             docsUrl: "https://docs.waveterm.dev/tab-backgrounds",
+            hasJsonView: true,
+        },
+        {
+            name: "Keybindings",
+            path: "keybindings.json",
+            language: "json",
+            description: "Custom keyboard shortcuts",
+            isArray: true,
             hasJsonView: true,
         },
         {
@@ -307,7 +316,7 @@ export class WaveConfigViewModel implements ViewModel {
             const content = fileData?.data64 ? base64ToString(fileData.data64) : "";
             globalStore.set(this.originalContentAtom, content);
             if (content.trim() === "") {
-                globalStore.set(this.fileContentAtom, "{\n\n}");
+                globalStore.set(this.fileContentAtom, file.isArray ? "[\n\n]" : "{\n\n}");
             } else {
                 globalStore.set(this.fileContentAtom, content);
             }
@@ -359,7 +368,8 @@ export class WaveConfigViewModel implements ViewModel {
         try {
             const parsed = JSON.parse(fileContent);
 
-            if (typeof parsed !== "object" || parsed == null || Array.isArray(parsed)) {
+            const isArray = Array.isArray(parsed);
+            if (typeof parsed !== "object" || parsed == null || (isArray && !selectedFile.isArray)) {
                 globalStore.set(this.validationErrorAtom, "JSON must be an object, not an array, primitive, or null");
                 return;
             }
