@@ -342,7 +342,6 @@ type CommandEventReadHistoryData struct {
 	MaxItems int    `json:"maxitems"`
 }
 
-
 type CpuDataRequest struct {
 	Id    string `json:"id"`
 	Count int    `json:"count"`
@@ -931,4 +930,5 @@ type CommandExcalidrawPushData struct {
 	BlockId   string `json:"blockid"`
 	SceneData any    `json:"scenedata"`
 	Format    string `json:"format,omitempty"`
+	PushId    string `json:"pushid,omitempty"`
 }

@@ -383,6 +383,7 @@ declare global {
         blockid: string;
         scenedata: any;
         format?: string;
+        pushid?: string;
     };
 
     // wshrpc.CommandFileCopyData

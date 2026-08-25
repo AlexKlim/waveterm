@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/skratchdot/open-golang/open"
 	"github.com/wavetermdev/waveterm/pkg/aiusechat"
 	"github.com/wavetermdev/waveterm/pkg/aiusechat/chatstore"
@@ -1589,6 +1590,7 @@ func (ws *WshServer) ExcalidrawPushCommand(ctx context.Context, data wshrpc.Comm
 	if block.Meta.GetString(waveobj.MetaKey_View, "") != "excalidraw" {
 		return fmt.Errorf("block %s is not an excalidraw view", data.BlockId)
 	}
+	data.PushId = uuid.NewString()
 	wps.Broker.Publish(wps.WaveEvent{
 		Event:   wps.Event_ExcalidrawPushScene,
 		Scopes:  []string{waveobj.MakeORef(waveobj.OType_Block, data.BlockId).String()},
