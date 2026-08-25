@@ -66,7 +66,7 @@ export class ExcalidrawModel implements ViewModel {
         this.viewName = atom((get) => {
             const filePath = get(this.filePathAtom);
             const isDirty = get(this.isDirtyAtom);
-            const name = filePath ? filePath.split("/").pop() ?? "Excalidraw" : "Excalidraw";
+            const name = filePath ? (filePath.split("/").pop() ?? "Excalidraw") : "Excalidraw";
             return isDirty ? `${name} *` : name;
         });
 
@@ -115,14 +115,9 @@ export class ExcalidrawModel implements ViewModel {
         // pushscene events are persisted, so a push that fired before this
         // block's frontend subscribed (wsh creates the block and pushes right
         // away, or pushes to a block on an inactive tab) can be replayed
-        this.replayPersistedPush().catch((e) =>
-            console.error("excalidraw pushscene history read failed:", e)
-        );
+        this.replayPersistedPush().catch((e) => console.error("excalidraw pushscene history read failed:", e));
     }
 
-    // A replay must not clobber file content saved after the push was first
-    // applied, so saved scenes carry the id of the last applied push and a
-    // replay of that same push is skipped.
     private async replayPersistedPush() {
         const events = await this.env.rpc.EventReadHistoryCommand(TabRpcClient, {
             event: "excalidraw:pushscene",
