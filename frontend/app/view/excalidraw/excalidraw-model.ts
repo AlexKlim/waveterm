@@ -39,6 +39,9 @@ export class ExcalidrawModel implements ViewModel {
     private excalidrawAPI: any = null;
     private lastSavedVersion: number = 0;
     private lastSavedBackground: string = undefined;
+    private lastAppliedPushId: string = null;
+    private pushSeq: number = 0;
+    private changeSeq: number = 0;
     private pendingElements: readonly any[] = [];
     private pendingAppState: any = null;
     private pendingFiles: any = null;
@@ -63,7 +66,7 @@ export class ExcalidrawModel implements ViewModel {
         this.viewName = atom((get) => {
             const filePath = get(this.filePathAtom);
             const isDirty = get(this.isDirtyAtom);
-            const name = filePath ? filePath.split("/").pop() ?? "Excalidraw" : "Excalidraw";
+            const name = filePath ? (filePath.split("/").pop() ?? "Excalidraw") : "Excalidraw";
             return isDirty ? `${name} *` : name;
         });
 
@@ -111,28 +114,42 @@ export class ExcalidrawModel implements ViewModel {
 
         // pushscene events are persisted, so a push that fired before this
         // block's frontend subscribed (wsh creates the block and pushes right
-        // away) can be replayed. File-backed blocks skip the replay: their
-        // scene reloads from the file, and replaying an old push would clobber
-        // any edits saved after it.
-        if (globalStore.get(this.filePathAtom) == null) {
-            waveEnv.rpc
-                .EventReadHistoryCommand(TabRpcClient, {
-                    event: "excalidraw:pushscene",
-                    scope: `block:${blockId}`,
-                    maxitems: 1,
-                })
-                .then((events) => {
-                    if (events?.length > 0) {
-                        this.handlePushSceneEvent(events[events.length - 1]);
-                    }
-                })
-                .catch((e) => console.error("excalidraw pushscene history read failed:", e));
+        // away, or pushes to a block on an inactive tab) can be replayed
+        this.replayPersistedPush().catch((e) => console.error("excalidraw pushscene history read failed:", e));
+    }
+
+    private async replayPersistedPush() {
+        const events = await this.env.rpc.EventReadHistoryCommand(TabRpcClient, {
+            event: "excalidraw:pushscene",
+            scope: `block:${this.blockId}`,
+            maxitems: 1,
+        });
+        if (!events || events.length === 0) {
+            return;
         }
+        const event = events[events.length - 1];
+        const pushId = (event.data as any)?.pushid;
+        const filePath = globalStore.get(this.filePathAtom);
+        if (filePath && pushId) {
+            try {
+                const fileData = await this.env.rpc.FileReadCommand(TabRpcClient, {
+                    info: { path: filePath },
+                });
+                const scene = JSON.parse(base64ToString(fileData?.data64));
+                if (scene?.wavepushid === pushId) {
+                    return;
+                }
+            } catch {
+                // unreadable or missing file: the push is the best content we have
+            }
+        }
+        this.handlePushSceneEvent(event);
     }
 
     private async handlePushSceneEvent(event: WaveEvent) {
         const pushData = event.data as any;
         if (!pushData) return;
+        const seq = ++this.pushSeq;
 
         let elements: any[];
         let appState: any = {};
@@ -142,6 +159,9 @@ export class ExcalidrawModel implements ViewModel {
             try {
                 const mermaidText = pushData.scenedata as string;
                 const result = await parseMermaidToExcalidraw(mermaidText);
+                if (seq !== this.pushSeq) {
+                    return;
+                }
                 elements = convertToExcalidrawElements(result.elements);
                 files = result.files;
             } catch (e) {
@@ -156,6 +176,7 @@ export class ExcalidrawModel implements ViewModel {
             if (sceneData?.type === "excalidraw") {
                 elements = sceneData.elements || [];
                 appState = sceneData.appState || {};
+                files = sceneData.files;
             } else if (Array.isArray(sceneData)) {
                 elements = sceneData;
             } else {
@@ -163,6 +184,7 @@ export class ExcalidrawModel implements ViewModel {
             }
         }
 
+        this.lastAppliedPushId = pushData.pushid ?? null;
         const sceneUpdate = { elements, appState, files };
         if (!this.excalidrawAPI) {
             this.pendingPushScene = sceneUpdate;
@@ -193,6 +215,7 @@ export class ExcalidrawModel implements ViewModel {
         this.pendingElements = scene.elements;
         this.pendingAppState = scene.appState;
         this.pendingFiles = scene.files;
+        this.changeSeq++;
         globalStore.set(this.isDirtyAtom, true);
         this.debouncedSave();
     }
@@ -208,6 +231,7 @@ export class ExcalidrawModel implements ViewModel {
         this.pendingElements = elements;
         this.pendingAppState = appState;
         this.pendingFiles = files;
+        this.changeSeq++;
         this.debouncedSave();
     }
 
@@ -227,6 +251,7 @@ export class ExcalidrawModel implements ViewModel {
         // and writes are chained so an older queued write cannot clobber a newer one
         const version = getSceneVersion(this.pendingElements as any[]);
         const background = this.pendingAppState?.viewBackgroundColor;
+        const seq = this.changeSeq;
         const sceneJson = JSON.stringify(
             {
                 type: "excalidraw",
@@ -236,6 +261,7 @@ export class ExcalidrawModel implements ViewModel {
                     viewBackgroundColor: this.pendingAppState?.viewBackgroundColor,
                 },
                 files: this.pendingFiles,
+                ...(this.lastAppliedPushId ? { wavepushid: this.lastAppliedPushId } : {}),
             },
             null,
             2
@@ -248,7 +274,7 @@ export class ExcalidrawModel implements ViewModel {
                 });
                 this.lastSavedVersion = version;
                 this.lastSavedBackground = background;
-                if (getSceneVersion(this.pendingElements as any[]) === version) {
+                if (this.changeSeq === seq) {
                     globalStore.set(this.isDirtyAtom, false);
                 }
             } catch (e) {
