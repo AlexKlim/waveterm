@@ -708,14 +708,19 @@ function registerGlobalKeys() {
         }
         const handler = handlerFactory(kb.commandstr);
         for (const keyStr of kb.keys) {
-            if (keyStr.includes(" ")) {
-                const [chordKey, secondKey] = keyStr.split(" ", 2);
+            const parts = keyStr.trim().split(/\s+/);
+            if (parts.length > 2 || parts[0] === "") {
+                console.warn("ignoring invalid keybinding (expected a key or a two-key chord):", keyStr);
+                continue;
+            }
+            if (parts.length === 2) {
+                const [chordKey, secondKey] = parts;
                 if (!globalChordMap.has(chordKey)) {
                     globalChordMap.set(chordKey, new Map<string, KeyHandler>());
                 }
                 globalChordMap.get(chordKey).set(secondKey, handler);
             } else {
-                globalKeyMap.set(keyStr, handler);
+                globalKeyMap.set(parts[0], handler);
             }
         }
     }
@@ -726,6 +731,7 @@ function registerGlobalKeys() {
 }
 
 function reregisterGlobalKeys() {
+    resetChord();
     globalKeyMap.clear();
     globalChordMap.clear();
     registerGlobalKeys();

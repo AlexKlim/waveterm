@@ -369,8 +369,13 @@ export class WaveConfigViewModel implements ViewModel {
             const parsed = JSON.parse(fileContent);
 
             const isArray = Array.isArray(parsed);
-            if (typeof parsed !== "object" || parsed == null || (isArray && !selectedFile.isArray)) {
-                globalStore.set(this.validationErrorAtom, "JSON must be an object, not an array, primitive, or null");
+            if (typeof parsed !== "object" || parsed == null || isArray !== !!selectedFile.isArray) {
+                globalStore.set(
+                    this.validationErrorAtom,
+                    selectedFile.isArray
+                        ? "JSON must be an array, not an object, primitive, or null"
+                        : "JSON must be an object, not an array, primitive, or null"
+                );
                 return;
             }
 
